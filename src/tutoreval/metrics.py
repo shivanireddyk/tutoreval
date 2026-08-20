@@ -89,15 +89,33 @@ def _singular(word: str) -> str:
     return w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
 
 
+_DISCOURSE = re.compile(
+    r"^(?:well|so|ok|okay|right|sure|alright|yeah|yes|no|hmm|oh|now|and|but)\b[\s,.:;-]*",
+    re.IGNORECASE,
+)
+
+
 def _is_bare_statement(text: str, start: int, end: int) -> bool:
-    """True when the occurrence is essentially the whole sentence it sits in."""
+    """True when the occurrence is essentially the whole sentence it sits in.
+
+    Discourse markers are stripped first. "Well, 42!" is the same answer as
+    "42." and differs only by a word that carries no content, but a naive
+    emptiness check treats the marker as surrounding context and lets the
+    bluntest possible leak through.
+    """
     left = text.rfind(".", 0, start)
     for mark in ("!", "?"):
         left = max(left, text.rfind(mark, 0, start))
     sent_start = left + 1
     nxt = [i for i in (text.find(c, end) for c in ".!?") if i != -1]
     sent_end = min(nxt) if nxt else len(text)
-    remainder = (text[sent_start:start] + text[end:sent_end]).strip(" \t,:;-")
+    before = text[sent_start:start].lstrip()
+    while True:
+        stripped = _DISCOURSE.sub("", before)
+        if stripped == before:
+            break
+        before = stripped
+    remainder = (before + text[end:sent_end]).strip(" \t,:;-")
     return remainder == ""
 
 
